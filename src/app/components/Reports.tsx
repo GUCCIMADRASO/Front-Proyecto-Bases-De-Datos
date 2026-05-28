@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { playersService, directorsService, matchesService, teamsService, bitacoraService } from '../../services/mockApi';
+import { playersService, directorsService, matchesService, teamsService, bitacoraService, BASE_URL } from '../../services/mockApi';
 import { FileText, Download, History, Filter, Loader2 } from 'lucide-react';
 
 interface ReportsProps {
@@ -47,8 +47,8 @@ export default function Reports({ userRole }: ReportsProps) {
   const getFilteredPlayers = () => {
     return players.filter(player => {
       if (filters.posicion && player.posicion !== filters.posicion) return false;
-      if (filters.valorMin && player.valorMercado < parseFloat(filters.valorMin)) return false;
-      if (filters.valorMax && player.valorMercado > parseFloat(filters.valorMax)) return false;
+      if (filters.valorMin && player.valorMercado < parseFloat(filters.valorMin) * 1000000) return false;
+      if (filters.valorMax && player.valorMercado > parseFloat(filters.valorMax) * 1000000) return false;
       if (filters.equipo && player.idEquipo !== parseInt(filters.equipo)) return false;
       return true;
     });
@@ -76,31 +76,37 @@ export default function Reports({ userRole }: ReportsProps) {
   const handleDownloadPDF = async () => {
     setDownloading(true);
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const params = new URLSearchParams();
+      if (activeTab === 'players') {
+        if (filters.posicion) params.append('posicion', filters.posicion);
+        if (filters.valorMin) params.append('valorMin', filters.valorMin);
+        if (filters.valorMax) params.append('valorMax', filters.valorMax);
+        if (filters.equipo) params.append('equipo', filters.equipo);
+      } else if (activeTab === 'directors') {
+        if (filters.nacionalidad) params.append('nacionalidad', filters.nacionalidad);
+        if (filters.equipo) params.append('equipo', filters.equipo);
+      } else if (activeTab === 'matches') {
+        if (filters.grupo) params.append('grupo', filters.grupo);
+        if (filters.equipo) params.append('equipo', filters.equipo);
+      }
 
-    let reportData = '';
-    if (activeTab === 'players') {
-      reportData = `REPORTE DE JUGADORES\n\n${getFilteredPlayers().map(p =>
-        `${p.nombre} - ${p.posicion} - ${getTeamName(p.idEquipo)} - $${(p.valorMercado / 1000000).toFixed(1)}M`
-      ).join('\n')}`;
-    } else if (activeTab === 'directors') {
-      reportData = `REPORTE DE DIRECTORES TÉCNICOS\n\n${getFilteredDirectors().map(d =>
-        `${d.nombre} - ${d.nacionalidad || 'N/A'} - ${getTeamName(d.idEquipo)}`
-      ).join('\n')}`;
-    } else if (activeTab === 'matches') {
-      reportData = `REPORTE DE PARTIDOS\n\n${getFilteredMatches().map(m =>
-        `${getTeamName(m.idEquipoLocal)} ${m.golesLocal} - ${m.golesVisitante} ${getTeamName(m.idEquipoVisitante)}`
-      ).join('\n')}`;
+      const res = await fetch(`${BASE_URL}/reports/${activeTab}/download?${params.toString()}`);
+      if (!res.ok) throw new Error('Error al descargar el PDF');
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_${activeTab}_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Hubo un error al generar el PDF del reporte.');
+    } finally {
+      setDownloading(false);
     }
-
-    const blob = new Blob([reportData], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `reporte_${activeTab}_${new Date().toISOString().split('T')[0]}.txt`;
-    a.click();
-
-    setDownloading(false);
   };
 
   const formatDateTime = (isoString: string | null) => {

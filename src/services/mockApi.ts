@@ -2,7 +2,7 @@ const STORAGE_KEYS = {
   currentUser: 'torneo_current_user'
 };
 
-const BASE_URL = 'http://localhost:8080/api';
+export const BASE_URL = 'http://localhost:8080/api';
 
 // Cache local en memoria sincronizado con el backend
 let cachedTeams: any[] = [];
